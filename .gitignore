@@ -1,21 +1,22 @@
-# Virtual environment (large, can be recreated)
+# Virtual environment
 venv/
 
-# Python cache files
+# Database files
+instance/
+*.db
+*.sqlite
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 
-# VS Code settings (optional - remove if you want to share)
+# VS Code
 .vscode/
 
-# Environment variables with secrets
+# Environment variables
 .env
 *.env
-
-# Database files (we'll add these later)
-*.db
-*.sqlite
 
 # OS files
 .DS_Store

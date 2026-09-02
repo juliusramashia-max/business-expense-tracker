@@ -1,0 +1,33 @@
+<!-- templates/home.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Business Expense Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>💰 Business Expense Tracker</h1>
+        
+        <div class="nav-links">
+            <a href="/add" class="btn btn-primary">➕ Add a New Expense</a>
+            <a href="/expenses" class="btn btn-secondary">📊 View All Expenses</a>
+        </div>
+        
+        <div style="margin-top: 30px; padding: 20px; background: #e8f4fd; border-radius: 8px;">
+            <h2>Welcome to your Expense Tracker!</h2>
+            <p>Record, manage, and analyse your business expenses with ease.</p>
+            <ul style="margin: 15px 0 0 20px; line-height: 2;">
+                <li>📝 Add expenses with date, person, amount, and category</li>
+                <li>📊 View all expenses in a table</li>
+                <li>💰 Calculate total spending automatically</li>
+                <li>🔒 Your data is stored securely in SQLite</li>
+            </ul>
+        </div>
+        
+        <p style="margin-top: 20px; color: #7f8c8d; text-align: center;">
+            <small>Business Expense Tracker &copy; 2026</small>
+        </p>
+    </div>
+</body>
+</html 

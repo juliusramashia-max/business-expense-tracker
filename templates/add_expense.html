@@ -3,104 +3,71 @@
 <html>
 <head>
     <title>Add Business Expense</title>
-    <style>
-        .flash-message {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-        }
-        .success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        /* Added some basic form styling */
-        div {
-            margin-bottom: 10px;
-        }
-        label {
-            display: inline-block;
-            width: 120px;
-        }
-        input, select, textarea {
-            width: 200px;
-            padding: 5px;
-        }
-        textarea {
-            vertical-align: top;
-        }
-        button {
-            padding: 8px 20px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-    </style>
+    <!-- Link to CSS file -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <h1>Add a New Business Expense</h1>
-    
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="flash-message {{ category }}">
-                    {{ message }}
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-    
-    <form action="/submit_expense" method="POST">
-        <div>
-            <label for="date">Date:</label>
-            <input type="date" id="date" name="date" required>
+    <div class="container">
+        <h1>💰 Add a New Business Expense</h1>
+        
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-message {{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="nav-links">
+            <a href="/">🏠 Home</a>
+            <a href="/expenses">📊 View All Expenses</a>
         </div>
         
-        <!-- NEW: Who incurred the expense -->
-        <div>
-            <label for="person">Employee Name:</label>
-            <input type="text" id="person" name="person" placeholder="e.g., John Doe" required>
-        </div>
-        
-        <div>
-            <label for="amount">Amount (in R):</label>
-            <input type="number" id="amount" name="amount" step="0.01" required>
-        </div>
-        
-        <div>
-            <label for="category">Category:</label>
-            <select id="category" name="category" required>
-                <option value="Food">Food</option>
-                <option value="Transport">Transport</option>
-                <option value="Office Supplies">Office Supplies</option>
-                <option value="Software">Software</option>
-                <option value="Other">Other</option>
-            </select>
-        </div>
-        
-        <div>
-            <label for="description">Description:</label>
-            <textarea id="description" name="description" rows="3"></textarea>
-        </div>
-        
-      <!-- Add this after the Description field -->
-        <div>
-            <label for="approval_notes">Notes for Manager:</label>
-            <textarea id="approval_notes" name="approval_notes" rows="2" 
-                  placeholder="e.g., This was for a client dinner with ABC Corp"></textarea>
-        </div>
-        
-        <div>
-            <button type="submit">Save Expense</button>
-            <a href="/" style="margin-left: 10px;">Cancel</a>
-        </div>
-    </form>
-    
-    <p><a href="/">Back to Home</a></p>
+        <form action="/submit_expense" method="POST">
+            <div class="form-group">
+                <label for="date">📅 Date:</label>
+                <input type="date" id="date" name="date" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="person">👤 Employee Name:</label>
+                <input type="text" id="person" name="person" placeholder="e.g., John Doe" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="amount">💰 Amount (in R):</label>
+                <input type="number" id="amount" name="amount" step="0.01" placeholder="0.00" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="category">📂 Category:</label>
+                <select id="category" name="category" required>
+                    <option value="Food">🍔 Food</option>
+                    <option value="Transport">🚗 Transport</option>
+                    <option value="Office Supplies">📎 Office Supplies</option>
+                    <option value="Software">💻 Software</option>
+                    <option value="Other">📦 Other</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">📝 Description:</label>
+                <textarea id="description" name="description" rows="3" placeholder="What was this expense for?"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="approval_notes">📋 Notes for Manager:</label>
+                <textarea id="approval_notes" name="approval_notes" rows="2" placeholder="Any additional context for approval..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn btn-success">💾 Save Expense</button>
+                <a href="/" class="btn btn-secondary">❌ Cancel</a>
+            </div>
+        </form>
+    </div>
 </body>
 </html>
