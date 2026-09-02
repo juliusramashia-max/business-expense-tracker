@@ -1,0 +1,22 @@
+# Virtual environment (large, can be recreated)
+venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# VS Code settings (optional - remove if you want to share)
+.vscode/
+
+# Environment variables with secrets
+.env
+*.env
+
+# Database files (we'll add these later)
+*.db
+*.sqlite
+
+# OS files
+.DS_Store
+Thumbs.db
