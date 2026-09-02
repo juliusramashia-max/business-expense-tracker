@@ -1,24 +1,33 @@
-# app.py - Business Expense Tracker with Fixed Math
+# app.py - Updated for PythonAnywhere deployment
 
 from flask import Flask, render_template, redirect, url_for, request, flash
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from sqlalchemy import func
+import os  # NEW: For environment variables
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'
+app.secret_key = 'your-secret-key-here'  # Change this to something unique!
 
 # ============================================
-# DATABASE SETUP
+# DATABASE SETUP - Updated for PythonAnywhere
 # ============================================
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///expenses.db'
+# Use absolute path for database on PythonAnywhere
+# This works both locally and on PythonAnywhere
+basedir = os.path.abspath(os.path.dirname(__file__))
+db_path = os.path.join(basedir, 'instance', 'expenses.db')
+
+# Ensure the instance directory exists
+os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
 # ============================================
-# DATABASE TABLE
+# DATABASE TABLE (unchanged)
 # ============================================
 
 class Expense(db.Model):
@@ -35,7 +44,7 @@ class Expense(db.Model):
         return f'<Expense {self.id}: {self.person} - R{self.amount}>'
 
 # ============================================
-# ROUTES
+# ROUTES (unchanged from your working version)
 # ============================================
 
 @app.route('/')
@@ -69,24 +78,17 @@ def submit_expense():
     
     flash(f'Expense of R{amount} by {person} for {category} saved successfully!', 'success')
     
-    print(f"Saved to database: {date} | {person} | R{amount} | {category}")
-    if approval_notes:
-        print(f"  Notes for manager: {approval_notes}")
-    
     return redirect(url_for('add_expense'))
 
 @app.route('/expenses')
 def view_expenses():
-    # Get filter parameters from the URL
     search_person = request.args.get('person', '')
     search_category = request.args.get('category', '')
     search_date_from = request.args.get('date_from', '')
     search_date_to = request.args.get('date_to', '')
     
-    # Start with all expenses
     query = Expense.query
     
-    # Apply filters (all optional)
     if search_person:
         query = query.filter(Expense.person == search_person)
     
@@ -99,26 +101,20 @@ def view_expenses():
     if search_date_to:
         query = query.filter(Expense.date <= search_date_to)
     
-    # Get FILTERED expenses
     filtered_expenses = query.order_by(Expense.date.desc()).all()
-    
-    # Calculate total from FILTERED expenses
     filtered_total = sum(expense.amount for expense in filtered_expenses)
     
-    # Get list of unique persons and categories for dropdowns
     persons = db.session.query(Expense.person).distinct().all()
     person_list = sorted([p[0] for p in persons if p[0]])
     
     categories = db.session.query(Expense.category).distinct().all()
     category_list = sorted([cat[0] for cat in categories if cat[0]])
     
-    # Category totals for summary (ALL time, not filtered)
     category_totals = db.session.query(
         Expense.category, 
         func.sum(Expense.amount).label('total')
     ).group_by(Expense.category).all()
     
-    # Build HTML page
     html = """
     <!DOCTYPE html>
     <html>
@@ -136,13 +132,11 @@ def view_expenses():
                 <a href="/expenses">🔄 Clear Filters</a>
             </div>
             
-            <!-- SEARCH FORM -->
             <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <h3>🔍 Search & Filter Expenses</h3>
                 <form action="/expenses" method="GET" style="background: none; padding: 0; margin: 0;">
                     <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: end;">
                         
-                        <!-- PERSON DROPDOWN -->
                         <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 150px;">
                             <label style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 5px;">👤 Person</label>
                             <select name="person" style="width: 100%; padding: 8px 12px; border: 2px solid #dce1e8; border-radius: 5px;">
@@ -157,7 +151,6 @@ def view_expenses():
                             </select>
                         </div>
                         
-                        <!-- CATEGORY DROPDOWN -->
                         <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 150px;">
                             <label style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 5px;">📂 Category</label>
                             <select name="category" style="width: 100%; padding: 8px 12px; border: 2px solid #dce1e8; border-radius: 5px;">
@@ -172,19 +165,16 @@ def view_expenses():
                             </select>
                         </div>
                         
-                        <!-- DATE FROM -->
                         <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 130px;">
                             <label style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 5px;">📅 From</label>
                             <input type="date" name="date_from" value="""" + search_date_from + """" style="width: 100%; padding: 8px 12px; border: 2px solid #dce1e8; border-radius: 5px;">
                         </div>
                         
-                        <!-- DATE TO -->
                         <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 130px;">
                             <label style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 5px;">📅 To</label>
                             <input type="date" name="date_to" value="""" + search_date_to + """" style="width: 100%; padding: 8px 12px; border: 2px solid #dce1e8; border-radius: 5px;">
                         </div>
                         
-                        <!-- BUTTONS -->
                         <div style="display: flex; gap: 10px; align-items: center; padding-bottom: 2px;">
                             <button type="submit" class="btn btn-primary">🔍 Search</button>
                             <a href="/expenses" class="btn btn-secondary">🔄 Clear All</a>
@@ -193,7 +183,6 @@ def view_expenses():
                 </form>
             </div>
             
-            <!-- CATEGORY SUMMARY - Shows totals for ALL categories -->
             <div style="background: #e8f4fd; padding: 15px; border-radius: 8px; margin: 15px 0;">
                 <h4 style="margin-bottom: 10px;">📊 Spending by Category (All Time)</h4>
                 <div style="display: flex; flex-wrap: wrap; gap: 15px;">
@@ -212,7 +201,6 @@ def view_expenses():
                 </div>
             </div>
             
-            <!-- RESULTS COUNT -->
             <p><strong>""" + str(len(filtered_expenses)) + """</strong> expenses found</p>
     """
     
@@ -251,7 +239,6 @@ def view_expenses():
             </table>
         """
         
-        # Total for FILTERED results
         html += f"""
             <div class="total-box" style="background: #27ae60;">
                 💰 Total for Filtered Results: R{filtered_total:.2f}
