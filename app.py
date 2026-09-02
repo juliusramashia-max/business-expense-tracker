@@ -1,8 +1,9 @@
-# app.py - With Professional Styling
+# app.py - Business Expense Tracker with Clean Search Interface
 
 from flask import Flask, render_template, redirect, url_for, request, flash
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from sqlalchemy import func
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
@@ -39,7 +40,6 @@ class Expense(db.Model):
 
 @app.route('/')
 def home():
-    # CHANGED: Now uses the home.html template
     return render_template('home.html')
 
 @app.route('/add')
@@ -77,9 +77,41 @@ def submit_expense():
 
 @app.route('/expenses')
 def view_expenses():
-    all_expenses = Expense.query.order_by(Expense.date.desc()).all()
+    # Get filter parameters from the URL
+    search_person = request.args.get('person', '')
+    search_category = request.args.get('category', '')
+    search_date_from = request.args.get('date_from', '')
+    search_date_to = request.args.get('date_to', '')
+    
+    # Start with all expenses
+    query = Expense.query
+    
+    # Apply filters (all optional - only apply if value is not empty)
+    if search_person:
+        query = query.filter(Expense.person == search_person)
+    
+    if search_category:
+        query = query.filter(Expense.category == search_category)
+    
+    if search_date_from:
+        query = query.filter(Expense.date >= search_date_from)
+    
+    if search_date_to:
+        query = query.filter(Expense.date <= search_date_to)
+    
+    # Order by date (newest first)
+    all_expenses = query.order_by(Expense.date.desc()).all()
     total = sum(expense.amount for expense in all_expenses)
     
+    # Get list of unique persons from database for dropdown
+    persons = db.session.query(Expense.person).distinct().all()
+    person_list = sorted([p[0] for p in persons if p[0]])
+    
+    # Get list of unique categories from database for dropdown
+    categories = db.session.query(Expense.category).distinct().all()
+    category_list = sorted([cat[0] for cat in categories if cat[0]])
+    
+    # Build HTML page
     html = """
     <!DOCTYPE html>
     <html>
@@ -94,7 +126,92 @@ def view_expenses():
             <div class="nav-links">
                 <a href="/">🏠 Home</a>
                 <a href="/add">➕ Add New Expense</a>
+                <a href="/expenses">🔄 Clear Filters</a>
             </div>
+            
+            <!-- SEARCH FORM -->
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3>🔍 Search & Filter Expenses</h3>
+                <form action="/expenses" method="GET" style="background: none; padding: 0; margin: 0;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: end;">
+                        
+                        <!-- PERSON DROPDOWN -->
+                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 150px;">
+                            <label style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 5px;">👤 Person</label>
+                            <select name="person" style="width: 100%; padding: 8px 12px; border: 2px solid #dce1e8; border-radius: 5px;">
+                                <option value="">All Persons</option>
+    """
+    
+    for person in person_list:
+        selected = 'selected' if person == search_person else ''
+        html += f'<option value="{person}" {selected}>{person}</option>'
+    
+    html += """
+                            </select>
+                        </div>
+                        
+                        <!-- CATEGORY DROPDOWN -->
+                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 150px;">
+                            <label style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 5px;">📂 Category</label>
+                            <select name="category" style="width: 100%; padding: 8px 12px; border: 2px solid #dce1e8; border-radius: 5px;">
+                                <option value="">All Categories</option>
+    """
+    
+    for category in category_list:
+        selected = 'selected' if category == search_category else ''
+        html += f'<option value="{category}" {selected}>{category}</option>'
+    
+    html += """
+                            </select>
+                        </div>
+                        
+                        <!-- DATE FROM -->
+                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 130px;">
+                            <label style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 5px;">📅 From</label>
+                            <input type="date" name="date_from" value="""" + search_date_from + """" style="width: 100%; padding: 8px 12px; border: 2px solid #dce1e8; border-radius: 5px;">
+                        </div>
+                        
+                        <!-- DATE TO -->
+                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 130px;">
+                            <label style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 5px;">📅 To</label>
+                            <input type="date" name="date_to" value="""" + search_date_to + """" style="width: 100%; padding: 8px 12px; border: 2px solid #dce1e8; border-radius: 5px;">
+                        </div>
+                        
+                        <!-- BUTTONS -->
+                        <div style="display: flex; gap: 10px; align-items: center; padding-bottom: 2px;">
+                            <button type="submit" class="btn btn-primary">🔍 Search</button>
+                            <a href="/expenses" class="btn btn-secondary">🔄 Clear All</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- CATEGORY SUMMARY -->
+            <div style="background: #e8f4fd; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <h4 style="margin-bottom: 10px;">📊 Spending by Category</h4>
+                <div style="display: flex; flex-wrap: wrap; gap: 15px;">
+    """
+    
+    category_totals = db.session.query(
+        Expense.category, 
+        func.sum(Expense.amount).label('total')
+    ).group_by(Expense.category).all()
+    
+    for category, total in category_totals:
+        html += f"""
+            <div style="background: white; padding: 10px 15px; border-radius: 5px; border: 1px solid #dce1e8;">
+                <span style="font-weight: 600;">{category}:</span>
+                <span style="color: #2c3e50;">R{total:.2f}</span>
+                <a href="/expenses?category={category}" style="margin-left: 10px; font-size: 12px;">🔍</a>
+            </div>
+        """
+    
+    html += """
+                </div>
+            </div>
+            
+            <!-- RESULTS COUNT -->
+            <p><strong>""" + str(len(all_expenses)) + """</strong> expenses found.</p>
     """
     
     if all_expenses:
@@ -140,7 +257,7 @@ def view_expenses():
     else:
         html += """
             <div class="flash-message info">
-                📭 No expenses found. <a href="/add">Add your first expense!</a>
+                📭 No expenses found matching your filters. <a href="/expenses">Clear filters</a> to see all expenses.
             </div>
         """
     
