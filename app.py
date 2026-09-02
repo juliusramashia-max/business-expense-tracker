@@ -1,4 +1,4 @@
-# app.py - Business Expense Tracker with Clean Search Interface
+# app.py - Business Expense Tracker with Fixed Math
 
 from flask import Flask, render_template, redirect, url_for, request, flash
 from flask_sqlalchemy import SQLAlchemy
@@ -86,7 +86,7 @@ def view_expenses():
     # Start with all expenses
     query = Expense.query
     
-    # Apply filters (all optional - only apply if value is not empty)
+    # Apply filters (all optional)
     if search_person:
         query = query.filter(Expense.person == search_person)
     
@@ -99,17 +99,24 @@ def view_expenses():
     if search_date_to:
         query = query.filter(Expense.date <= search_date_to)
     
-    # Order by date (newest first)
-    all_expenses = query.order_by(Expense.date.desc()).all()
-    total = sum(expense.amount for expense in all_expenses)
+    # Get FILTERED expenses
+    filtered_expenses = query.order_by(Expense.date.desc()).all()
     
-    # Get list of unique persons from database for dropdown
+    # Calculate total from FILTERED expenses
+    filtered_total = sum(expense.amount for expense in filtered_expenses)
+    
+    # Get list of unique persons and categories for dropdowns
     persons = db.session.query(Expense.person).distinct().all()
     person_list = sorted([p[0] for p in persons if p[0]])
     
-    # Get list of unique categories from database for dropdown
     categories = db.session.query(Expense.category).distinct().all()
     category_list = sorted([cat[0] for cat in categories if cat[0]])
+    
+    # Category totals for summary (ALL time, not filtered)
+    category_totals = db.session.query(
+        Expense.category, 
+        func.sum(Expense.amount).label('total')
+    ).group_by(Expense.category).all()
     
     # Build HTML page
     html = """
@@ -186,16 +193,11 @@ def view_expenses():
                 </form>
             </div>
             
-            <!-- CATEGORY SUMMARY -->
+            <!-- CATEGORY SUMMARY - Shows totals for ALL categories -->
             <div style="background: #e8f4fd; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <h4 style="margin-bottom: 10px;">📊 Spending by Category</h4>
+                <h4 style="margin-bottom: 10px;">📊 Spending by Category (All Time)</h4>
                 <div style="display: flex; flex-wrap: wrap; gap: 15px;">
     """
-    
-    category_totals = db.session.query(
-        Expense.category, 
-        func.sum(Expense.amount).label('total')
-    ).group_by(Expense.category).all()
     
     for category, total in category_totals:
         html += f"""
@@ -211,10 +213,10 @@ def view_expenses():
             </div>
             
             <!-- RESULTS COUNT -->
-            <p><strong>""" + str(len(all_expenses)) + """</strong> expenses found.</p>
+            <p><strong>""" + str(len(filtered_expenses)) + """</strong> expenses found</p>
     """
     
-    if all_expenses:
+    if filtered_expenses:
         html += """
             <table>
                 <thead>
@@ -231,7 +233,7 @@ def view_expenses():
                 <tbody>
         """
         
-        for expense in all_expenses:
+        for expense in filtered_expenses:
             html += f"""
                 <tr>
                     <td>{expense.id}</td>
@@ -249,9 +251,10 @@ def view_expenses():
             </table>
         """
         
+        # Total for FILTERED results
         html += f"""
-            <div class="total-box">
-                💰 Total Spent: R{total:.2f}
+            <div class="total-box" style="background: #27ae60;">
+                💰 Total for Filtered Results: R{filtered_total:.2f}
             </div>
         """
     else:
