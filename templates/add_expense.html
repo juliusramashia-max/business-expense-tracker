@@ -3,7 +3,6 @@
 <html>
 <head>
     <title>Add Business Expense</title>
-    <!-- Link to CSS file -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -26,7 +25,8 @@
             <a href="/expenses">📊 View All Expenses</a>
         </div>
         
-        <form action="/submit_expense" method="POST">
+        <!-- IMPORTANT: enctype="multipart/form-data" is REQUIRED for file uploads -->
+        <form action="/submit_expense" method="POST" enctype="multipart/form-data">
             <div class="form-group">
                 <label for="date">📅 Date:</label>
                 <input type="date" id="date" name="date" required>
@@ -61,6 +61,20 @@
             <div class="form-group">
                 <label for="approval_notes">📋 Notes for Manager:</label>
                 <textarea id="approval_notes" name="approval_notes" rows="2" placeholder="Any additional context for approval..."></textarea>
+                <div style="font-size: 12px; color: #6c757d; margin-top: 5px;">
+                    ⚠️ Either upload a receipt OR add notes for your manager (one is required)
+                </div>
+            </div>
+            
+            <!-- ============================================ -->
+            <!-- RECEIPT UPLOAD FIELD - THIS WAS MISSING!    -->
+            <!-- ============================================ -->
+            <div class="form-group">
+                <label for="receipt">📎 Receipt File:</label>
+                <input type="file" id="receipt" name="receipt" accept=".pdf,.png,.jpg,.jpeg,.gif,.doc,.docx">
+                <div style="font-size: 12px; color: #6c757d; margin-top: 5px;">
+                    Allowed: PDF, PNG, JPG, JPEG, GIF, DOC, DOCX (Max 5MB)
+                </div>
             </div>
             
             <div class="form-group">

@@ -1,33 +1,53 @@
-# app.py - Updated for PythonAnywhere deployment
+# app.py - Complete Business Expense Tracker with Receipt Uploads
 
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, render_template, redirect, url_for, request, flash, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from sqlalchemy import func
-import os  # NEW: For environment variables
+import os
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Change this to something unique!
+app.secret_key = 'your-secret-key-here'
 
 # ============================================
-# DATABASE SETUP - Updated for PythonAnywhere
+# DATABASE SETUP
 # ============================================
 
-# Use absolute path for database on PythonAnywhere
-# This works both locally and on PythonAnywhere
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(basedir, 'instance', 'expenses.db')
-
-# Ensure the instance directory exists
 os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# ============================================
+# FILE UPLOAD CONFIGURATION
+# ============================================
+
+UPLOAD_FOLDER = os.path.join(basedir, 'uploads')
+ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx'}
+MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5MB limit
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+
+# Create upload folder if it doesn't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 db = SQLAlchemy(app)
 
 # ============================================
-# DATABASE TABLE (unchanged)
+# FILE UPLOAD HELPER FUNCTIONS
+# ============================================
+
+def allowed_file(filename):
+    """Check if the file has an allowed extension"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# ============================================
+# DATABASE MODEL
 # ============================================
 
 class Expense(db.Model):
@@ -38,13 +58,14 @@ class Expense(db.Model):
     category = db.Column(db.String(50), nullable=False)
     description = db.Column(db.String(200), nullable=True)
     approval_notes = db.Column(db.String(200), nullable=True)
+    receipt_file = db.Column(db.String(200), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def __repr__(self):
         return f'<Expense {self.id}: {self.person} - R{self.amount}>'
 
 # ============================================
-# ROUTES (unchanged from your working version)
+# ROUTES
 # ============================================
 
 @app.route('/')
@@ -64,13 +85,32 @@ def submit_expense():
     description = request.form.get('description')
     approval_notes = request.form.get('approval_notes')
     
+    # Handle file upload
+    receipt_file = None
+    if 'receipt' in request.files:
+        file = request.files['receipt']
+        if file and file.filename != '' and allowed_file(file.filename):
+            # Secure the filename
+            filename = secure_filename(file.filename)
+            # Add timestamp to make it unique
+            unique_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
+            # Save the file
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
+            receipt_file = unique_filename
+    
+    # Validation: require either receipt or approval notes
+    if not receipt_file and not approval_notes:
+        flash('Please either upload a receipt or add notes for your manager.', 'error')
+        return redirect(url_for('add_expense'))
+    
     new_expense = Expense(
         date=date,
         person=person,
         amount=float(amount),
         category=category,
         description=description,
-        approval_notes=approval_notes
+        approval_notes=approval_notes,
+        receipt_file=receipt_file
     )
     
     db.session.add(new_expense)
@@ -216,12 +256,18 @@ def view_expenses():
                         <th>Category</th>
                         <th>Description</th>
                         <th>Notes</th>
+                        <th>Receipt</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
         """
         
         for expense in filtered_expenses:
+            receipt_html = '-'
+            if expense.receipt_file:
+                receipt_html = f'<a href="/uploads/{expense.receipt_file}" target="_blank">📄 View</a>'
+            
             html += f"""
                 <tr>
                     <td>{expense.id}</td>
@@ -231,12 +277,29 @@ def view_expenses():
                     <td>{expense.category}</td>
                     <td>{expense.description or '-'}</td>
                     <td>{expense.approval_notes or '-'}</td>
+                    <td>{receipt_html}</td>
+                    <td>
+                        <a href="/edit/{expense.id}" class="btn btn-primary" style="padding: 5px 10px; font-size: 12px; text-decoration: none; color: white; background: #3498db; border-radius: 4px;">✏️ Edit</a>
+                        <button onclick="confirmDelete({expense.id})" class="btn btn-danger" style="padding: 5px 10px; font-size: 12px; color: white; background: #e74c3c; border: none; border-radius: 4px; cursor: pointer;">🗑️ Delete</button>
+                    </td>
                 </tr>
             """
         
         html += """
                 </tbody>
             </table>
+            
+            <script>
+                function confirmDelete(expenseId) {
+                    if (confirm('Are you sure you want to delete this expense? This action cannot be undone!')) {
+                        var form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = '/delete/' + expenseId;
+                        document.body.appendChild(form);
+                        form.submit();
+                    }
+                }
+            </script>
         """
         
         html += f"""
@@ -258,6 +321,195 @@ def view_expenses():
     """
     
     return html
+
+# ============================================
+# EDIT EXPENSE
+# ============================================
+
+def render_edit_form(expense):
+    """Helper function to render the edit form"""
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Edit Expense</title>
+        <link rel="stylesheet" href="/static/style.css">
+    </head>
+    <body>
+        <div class="container">
+            <h1>✏️ Edit Expense #{expense_id}</h1>
+            
+            <div class="nav-links">
+                <a href="/">🏠 Home</a>
+                <a href="/expenses">📊 View All Expenses</a>
+            </div>
+            
+            <form action="/edit/{expense_id}" method="POST" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="date">📅 Date:</label>
+                    <input type="date" id="date" name="date" value="{date}" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="person">👤 Employee Name:</label>
+                    <input type="text" id="person" name="person" value="{person}" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="amount">💰 Amount (in R):</label>
+                    <input type="number" id="amount" name="amount" step="0.01" value="{amount}" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="category">📂 Category:</label>
+                    <select id="category" name="category" required>
+                        <option value="Food" {food_selected}>🍔 Food</option>
+                        <option value="Transport" {transport_selected}>🚗 Transport</option>
+                        <option value="Office Supplies" {office_selected}>📎 Office Supplies</option>
+                        <option value="Software" {software_selected}>💻 Software</option>
+                        <option value="Other" {other_selected}>📦 Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="description">📝 Description:</label>
+                    <textarea id="description" name="description" rows="3">{description}</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="approval_notes">📋 Notes for Manager:</label>
+                    <textarea id="approval_notes" name="approval_notes" rows="2">{approval_notes}</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="receipt">📎 Receipt File:</label>
+                    <input type="file" id="receipt" name="receipt" accept=".pdf,.png,.jpg,.jpeg,.gif,.doc,.docx">
+    """
+    
+    if expense.receipt_file:
+        html += f"""
+                    <div style="margin-top: 5px; color: #28a745;">
+                        📄 Current file: {expense.receipt_file}
+                        <a href="/delete_receipt/{expense.id}" style="color: #dc3545; margin-left: 10px;" onclick="return confirm('Delete this receipt?')">🗑️ Remove</a>
+                    </div>
+        """
+    
+    html += """
+                </div>
+                
+                <div class="form-group">
+                    <button type="submit" class="btn btn-success">💾 Update Expense</button>
+                    <a href="/expenses" class="btn btn-secondary">❌ Cancel</a>
+                </div>
+            </form>
+        </div>
+    </body>
+    </html>
+    """.format(
+        expense_id=expense.id,
+        date=expense.date,
+        person=expense.person,
+        amount=expense.amount,
+        description=expense.description or '',
+        approval_notes=expense.approval_notes or '',
+        food_selected='selected' if expense.category == 'Food' else '',
+        transport_selected='selected' if expense.category == 'Transport' else '',
+        office_selected='selected' if expense.category == 'Office Supplies' else '',
+        software_selected='selected' if expense.category == 'Software' else '',
+        other_selected='selected' if expense.category == 'Other' else ''
+    )
+    
+    return html
+
+@app.route('/edit/<int:expense_id>', methods=['GET', 'POST'])
+def edit_expense(expense_id):
+    expense = Expense.query.get_or_404(expense_id)
+    
+    if request.method == 'POST':
+        # Update fields
+        expense.date = request.form.get('date')
+        expense.person = request.form.get('person')
+        expense.amount = float(request.form.get('amount'))
+        expense.category = request.form.get('category')
+        expense.description = request.form.get('description')
+        expense.approval_notes = request.form.get('approval_notes')
+        
+        # Handle file upload
+        if 'receipt' in request.files:
+            file = request.files['receipt']
+            if file and file.filename != '' and allowed_file(file.filename):
+                # Delete old file if it exists
+                if expense.receipt_file:
+                    old_path = os.path.join(app.config['UPLOAD_FOLDER'], expense.receipt_file)
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+                
+                # Save new file
+                filename = secure_filename(file.filename)
+                unique_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
+                expense.receipt_file = unique_filename
+        
+        # Validation: require either receipt or approval notes
+        if not expense.receipt_file and not expense.approval_notes:
+            flash('Please either upload a receipt or add notes for your manager.', 'error')
+            return render_edit_form(expense)
+        
+        db.session.commit()
+        
+        flash(f'Expense #{expense.id} updated successfully!', 'success')
+        return redirect(url_for('view_expenses'))
+    
+    return render_edit_form(expense)
+
+# ============================================
+# DELETE EXPENSE
+# ============================================
+
+@app.route('/delete/<int:expense_id>', methods=['POST'])
+def delete_expense(expense_id):
+    expense = Expense.query.get_or_404(expense_id)
+    
+    # Delete the receipt file if it exists
+    if expense.receipt_file:
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], expense.receipt_file)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+    
+    expense_info = f"{expense.person} - R{expense.amount} ({expense.category})"
+    
+    db.session.delete(expense)
+    db.session.commit()
+    
+    flash(f'Expense #{expense_id} ({expense_info}) deleted successfully!', 'success')
+    return redirect(url_for('view_expenses'))
+
+# ============================================
+# DELETE RECEIPT
+# ============================================
+
+@app.route('/delete_receipt/<int:expense_id>')
+def delete_receipt(expense_id):
+    expense = Expense.query.get_or_404(expense_id)
+    
+    if expense.receipt_file:
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], expense.receipt_file)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        expense.receipt_file = None
+        db.session.commit()
+        flash('Receipt removed successfully!', 'success')
+    
+    return redirect(url_for('edit_expense', expense_id=expense_id))
+
+# ============================================
+# SERVE UPLOADED FILES
+# ============================================
+
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    """Serve uploaded files"""
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # ============================================
 # CREATE DATABASE TABLES
